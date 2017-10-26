@@ -134,3 +134,10 @@ export interface ITfvcCommand<T> {
     ParseOutput(executionResult: IExecutionResult): Promise<T>;
     ParseExeOutput(executionResult: IExecutionResult): Promise<T>;
 }
+
+export interface IScmProvider {
+    Initialize(): Promise<void>;
+    Reinitialize(): Promise<void>;
+    appendToCheckinMessage(message: string);
+    dispose();
+}

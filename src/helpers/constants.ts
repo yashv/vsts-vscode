@@ -189,6 +189,18 @@ export class TfvcTelemetryEvents {
     static ExeNonEnuConfiguredMoreDetails: string = TfvcTelemetryEvents.UsingExe + "-" + TfvcBaseTelemetryEvents.NonEnuConfiguredMoreDetails;
 }
 
+class GitBaseTelemetryEvents {
+    static TelemetryPrefix: string = "git/";
+    static Configured: string = "configured";
+    static Connected: string = "connected";
+}
+
+export class GitTelemetryEvents {
+    static UsingGit: string = GitBaseTelemetryEvents.TelemetryPrefix;
+    static Configured: string = GitTelemetryEvents.UsingGit + "-" + GitBaseTelemetryEvents.Configured;
+    static Connected: string = GitTelemetryEvents.UsingGit + "-" + GitBaseTelemetryEvents.Connected;
+}
+
 export class WellKnownRepositoryTypes {
     static TfsGit: string = "TfsGit";
 }

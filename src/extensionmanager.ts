@@ -6,7 +6,7 @@
 
 import { Disposable, FileSystemWatcher, StatusBarAlignment, StatusBarItem, version, window, workspace } from "vscode";
 import { Settings } from "./helpers/settings";
-import { CommandNames, Constants, TelemetryEvents, TfvcTelemetryEvents } from "./helpers/constants";
+import { CommandNames, Constants, TelemetryEvents, TfvcTelemetryEvents, GitTelemetryEvents } from "./helpers/constants";
 import { CredentialManager } from "./helpers/credentialmanager";
 import { Logger } from "./helpers/logger";
 import { Strings } from "./helpers/strings";
@@ -30,9 +30,12 @@ import { TfvcExtension } from "./tfvc/tfvc-extension";
 import { TfvcErrorCodes } from "./tfvc/tfvcerror";
 import { TfvcSCMProvider } from "./tfvc/tfvcscmprovider";
 import { TfvcRepository } from "./tfvc/tfvcrepository";
+import { IScmProvider } from "./tfvc/interfaces";
 
 import * as path from "path";
 import * as util from "util";
+import { GitContext } from "./contexts/gitcontext";
+import { GitSCMProvider } from "./tfvc/gitscmprovider";
 
 export class ExtensionManager implements Disposable {
     private _teamServicesStatusBarItem: StatusBarItem;
@@ -45,7 +48,7 @@ export class ExtensionManager implements Disposable {
     private _credentialManager : CredentialManager;
     private _teamExtension: TeamExtension;
     private _tfvcExtension: TfvcExtension;
-    private _scmProvider: TfvcSCMProvider;
+    private _scmProvider: IScmProvider;
 
     public async Initialize(): Promise<void> {
         await this.setupFileSystemWatcherOnConfig();
@@ -89,6 +92,10 @@ export class ExtensionManager implements Disposable {
         return this._tfvcExtension;
     }
 
+    public get SCMProvider(): IScmProvider {
+        return this._scmProvider;
+    }
+
     //Meant to reinitialize the extension when coming back online
     public Reinitialize(): void {
         this.cleanup(true);
@@ -103,8 +110,8 @@ export class ExtensionManager implements Disposable {
     //Ensure we have a TFS or Team Services-based repository. Otherwise, return false.
     private ensureMinimalInitialization(): boolean {
         if (!this._repoContext
-                || !this._serverContext
-                || !this._serverContext.RepoInfo.IsTeamFoundation) {
+            || !this._serverContext
+            || !this._serverContext.RepoInfo.IsTeamFoundation) {
             //If the user previously signed out (in this session of VS Code), show a message to that effect
             if (this._teamExtension.IsSignedOut) {
                 this.setErrorStatus(Strings.UserMustSignIn, CommandNames.Signin);
@@ -356,6 +363,21 @@ export class ExtensionManager implements Disposable {
                                 Logger.LogDebug(`Re-initialized the TfvcSCMProvider`);
                             }
                             this.sendTfvcConnectedTelemetry(tfvcContext.TfvcRepository);
+                        } else if (this._repoContext.Type === RepositoryType.GIT) {
+                            const gitContext: GitContext = <GitContext>this._repoContext;
+                            this.sendGitConfiguredTelemetry(gitContext);
+                            Logger.LogInfo(`Sent GIT tooling telemetry`);
+                            if (!this._scmProvider) {
+                                Logger.LogDebug(`Initializing the GitSCMProvider`);
+                                this._scmProvider = new GitSCMProvider(this);
+                                await this._scmProvider.Initialize();
+                                Logger.LogDebug(`Initialized the GitSCMProvider`);
+                            } else {
+                                Logger.LogDebug(`Re-initializing the GitSCMProvider`);
+                                await this._scmProvider.Reinitialize();
+                                Logger.LogDebug(`Re-initialized the GitSCMProvider`);
+                            }
+                            this.sendGitConnectedTelemetry(gitContext);
                         }
                     } catch (err) {
                         Logger.LogError(`Caught an exception during Tfvc SCM Provider initialization`);
@@ -427,6 +449,26 @@ export class ExtensionManager implements Disposable {
         Telemetry.SendEvent(event);
     }
 
+    //Sends telemetry for git
+    private sendGitConfiguredTelemetry(gitContext: GitContext): void {
+        let event: string = GitTelemetryEvents.Configured;
+
+        if (gitContext.IsTeamServices) {
+            event = GitTelemetryEvents.Configured;
+        }
+        Telemetry.SendEvent(event);
+
+    }
+
+    //Sends telemetry for git
+    private sendGitConnectedTelemetry(gitContext: GitContext): void {
+        let event: string = GitTelemetryEvents.Connected;
+        if (gitContext.IsTeamServices) {
+            event = GitTelemetryEvents.Connected;
+        }
+        Telemetry.SendEvent(event);
+    }
+
     //Determines which Tfvc errors to display in the status bar ui
     private shouldDisplayTfvcError(errorCode: string): boolean {
         if (TfvcErrorCodes.MinVersionWarning === errorCode ||
@@ -482,12 +524,12 @@ export class ExtensionManager implements Disposable {
 
     private logDebugInformation(): void {
         Logger.LogDebug("Account: " + this._serverContext.RepoInfo.Account + " "
-                            + "Team Project: " + this._serverContext.RepoInfo.TeamProject + " "
-                            + "Collection: " + this._serverContext.RepoInfo.CollectionName + " "
-                            + "Repository: " + this._serverContext.RepoInfo.RepositoryName + " "
-                            + "UserCustomDisplayName: " + this._serverContext.UserInfo.CustomDisplayName + " "
-                            + "UserProviderDisplayName: " + this._serverContext.UserInfo.ProviderDisplayName + " "
-                            + "UserId: " + this._serverContext.UserInfo.Id + " ");
+            + "Team Project: " + this._serverContext.RepoInfo.TeamProject + " "
+            + "Collection: " + this._serverContext.RepoInfo.CollectionName + " "
+            + "Repository: " + this._serverContext.RepoInfo.RepositoryName + " "
+            + "UserCustomDisplayName: " + this._serverContext.UserInfo.CustomDisplayName + " "
+            + "UserProviderDisplayName: " + this._serverContext.UserInfo.ProviderDisplayName + " "
+            + "UserId: " + this._serverContext.UserInfo.Id + " ");
         Logger.LogDebug("repositoryFolder: " + this._repoContext.RepoFolder);
         Logger.LogDebug("repositoryRemoteUrl: " + this._repoContext.RemoteUrl);
         if (this._repoContext.Type === RepositoryType.GIT) {
@@ -497,7 +539,7 @@ export class ExtensionManager implements Disposable {
         }
         Logger.LogDebug("IsSsh: " + this._repoContext.IsSsh);
         Logger.LogDebug("proxy: " + (Utils.IsProxyEnabled() ? "enabled" : "not enabled")
-                        + ", team services: " + this._serverContext.RepoInfo.IsTeamServices.toString());
+            + ", team services: " + this._serverContext.RepoInfo.IsTeamServices.toString());
     }
 
     private logStart(loggingLevel: string, rootPath: string): void {
@@ -533,7 +575,7 @@ export class ExtensionManager implements Disposable {
     private async setupFileSystemWatcherOnHead(): Promise<void> {
         if (this._repoContext && this._repoContext.Type === RepositoryType.GIT) {
             const pattern: string = this._repoContext.RepoFolder + "/HEAD";
-            const fsw:FileSystemWatcher = workspace.createFileSystemWatcher(pattern, true, false, true);
+            const fsw: FileSystemWatcher = workspace.createFileSystemWatcher(pattern, true, false, true);
             fsw.onDidChange(async (/*uri*/) => {
                 Logger.LogInfo("HEAD has changed, re-parsing RepoContext object");
                 this._repoContext = await RepositoryContextFactory.CreateRepositoryContext(workspace.rootPath, this._settings);
@@ -558,7 +600,7 @@ export class ExtensionManager implements Disposable {
         if (this._repoContext && this._repoContext.Type === RepositoryType.GIT) {
             const pattern: string = path.join(workspace.rootPath, ".git", "config");
             //We want to listen to file creation, change and delete events
-            const fsw:FileSystemWatcher = workspace.createFileSystemWatcher(pattern, false, false, false);
+            const fsw: FileSystemWatcher = workspace.createFileSystemWatcher(pattern, false, false, false);
             fsw.onDidCreate((/*uri*/) => {
                 //When a new local repo is initialized (e.g., git init), re-initialize the extension
                 Logger.LogInfo("config has been created, re-initializing the extension");

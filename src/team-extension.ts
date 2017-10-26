@@ -4,7 +4,7 @@
 *--------------------------------------------------------------------------------------------*/
 "use strict";
 
-import { scm, StatusBarAlignment, StatusBarItem, ProgressLocation, window } from "vscode";
+import { StatusBarAlignment, StatusBarItem, ProgressLocation, window } from "vscode";
 import { DeviceFlowAuthenticator, DeviceFlowDetails, IDeviceFlowAuthenticationOptions, IDeviceFlowTokenOptions } from "vsts-device-flow-auth";
 import { PinnedQuerySettings } from "./helpers/settings";
 import { CommandNames, Constants, DeviceFlowConstants, TelemetryEvents, TfvcTelemetryEvents, WitTypes } from "./helpers/constants";
@@ -363,19 +363,10 @@ export class TeamExtension  {
                 // Append the string to end of the message
                 // Note: we are prefixing the message with a space so that the # char is not in the first column
                 //       This helps in case the user ends up editing the comment from the Git command line
-                this.appendToCheckinMessage(" " + workitems[i]);
+                this._manager.SCMProvider.appendToCheckinMessage(" " + workitems[i]);
             }
         } else {
             this._manager.DisplayErrorMessage();
-        }
-    }
-
-    private appendToCheckinMessage(line: string): void {
-        const previousMessage = scm.inputBox.value;
-        if (previousMessage) {
-            scm.inputBox.value = previousMessage + "\n" + line;
-        } else {
-            scm.inputBox.value = line;
         }
     }
 

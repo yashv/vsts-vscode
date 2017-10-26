@@ -18,7 +18,7 @@ import { RepositoryType } from "../contexts/repositorycontext";
 import { TfvcOutput } from "./tfvcoutput";
 import { TfvcContentProvider } from "./scm/tfvccontentprovider";
 import { TfvcError } from "./tfvcerror";
-import { ICheckinInfo } from "./interfaces";
+import { ICheckinInfo, IScmProvider } from "./interfaces";
 
 /**
  * This class provides the SCM implementation for TFVC.
@@ -26,7 +26,7 @@ import { ICheckinInfo } from "./interfaces";
  *      F1 -> SCM: Enable SCM Preview
  *      F1 -> SCM: Switch SCM Provider -> Choose TFVC from the pick list
  */
-export class TfvcSCMProvider {
+export class TfvcSCMProvider implements IScmProvider {
     public static scmScheme: string = "tfvc";
     private static instance: TfvcSCMProvider = undefined;
 
@@ -42,7 +42,8 @@ export class TfvcSCMProvider {
 
     /* Static helper methods */
     public static ClearCheckinMessage(): void {
-        scm.inputBox.value = "";
+        const tfvcProvider: TfvcSCMProvider = TfvcSCMProvider.getProviderInstance();
+        tfvcProvider._sourceControl.inputBox.value = "";
     }
 
     public static GetCheckinInfo(): ICheckinInfo {
@@ -50,7 +51,7 @@ export class TfvcSCMProvider {
 
         try {
             const files: string[] = [];
-            const commitMessage: string = scm.inputBox.value;
+            const commitMessage: string = tfvcProvider._sourceControl.inputBox.value;
             const workItemIds: number[] = TfvcSCMProvider.getWorkItemIdsFromMessage(commitMessage);
 
             const resources: Resource[] = tfvcProvider._model.IncludedGroup.resources;
@@ -255,7 +256,7 @@ export class TfvcSCMProvider {
         if (resource.HasStatus(Status.CONFLICT) ||
             resource.HasStatus(Status.EDIT) ||
             resource.HasStatus(Status.RENAME)) {
-                return resource.GetServerUri();
+            return resource.GetServerUri();
         } else {
             return undefined;
         }
@@ -285,6 +286,15 @@ export class TfvcSCMProvider {
 
     public static async OpenDiff(resource: Resource): Promise<void> {
         return await commands.executeCommand<void>(TfvcCommandNames.Open, resource);
+    }
+
+    public appendToCheckinMessage(message: string): void {
+        const previousMessage = this._sourceControl.inputBox.value;
+        if (previousMessage) {
+            this._sourceControl.inputBox.value = previousMessage + "\n" + message;
+        } else {
+            this._sourceControl.inputBox.value = message;
+        }
     }
 
 }
